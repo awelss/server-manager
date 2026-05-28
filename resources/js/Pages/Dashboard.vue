@@ -129,6 +129,27 @@ const getGaugeColor = (pct) => {
   return 'stroke-emerald-400 shadow-emerald-400/50 glow-success';
 };
 
+// Stat bar gradient color based on usage
+const getBarGradient = (pct) => {
+  if (pct >= 85) return 'from-red-600 to-rose-400';
+  if (pct >= 60) return 'from-amber-500 to-yellow-300';
+  return 'from-emerald-500 to-cyan-400';
+};
+
+// Stat bar glow class
+const getBarGlow = (pct) => {
+  if (pct >= 85) return 'shadow-red-500/40';
+  if (pct >= 60) return 'shadow-amber-500/40';
+  return 'shadow-emerald-500/40';
+};
+
+// Usage status label
+const getUsageStatus = (pct) => {
+  if (pct >= 85) return { label: 'Critical', cls: 'text-red-400' };
+  if (pct >= 60) return { label: 'High', cls: 'text-amber-400' };
+  return { label: 'Normal', cls: 'text-emerald-400' };
+};
+
 // Calculate SVG Polyline Points for History Chart
 const buildPoints = (metrics, key, width, height) => {
   if (!metrics || metrics.length < 2) return '';
@@ -261,84 +282,94 @@ const buildAreaPoints = (metrics, key, width, height) => {
                 </div>
               </div>
 
-              <!-- Resource Gauges (Only if active/online or has metrics) -->
-              <div v-if="server.latest_metric" class="grid grid-cols-3 gap-4 mb-6">
-                <!-- CPU Gauge -->
-                <div class="flex flex-col items-center p-3 bg-white/2 rounded-xl border border-white/5 text-center">
-                  <span class="text-3xs text-gray-500 uppercase tracking-wider mb-2">CPU</span>
-                  <div class="relative w-20 h-20">
-                    <svg class="gauge-svg w-20 h-20">
-                      <!-- Base Track -->
-                      <circle class="gauge-track" cx="40" cy="40" :r="RADIUS" stroke-width="6" fill="transparent"></circle>
-                      <!-- Progress bar -->
-                      <circle 
-                        class="gauge-progress"
-                        :class="getGaugeColor(server.latest_metric.cpu_usage)"
-                        cx="40" cy="40" :r="RADIUS" stroke-width="6" fill="transparent"
-                        :stroke-dasharray="CIRCUMFERENCE"
-                        :stroke-dashoffset="strokeDashoffset(server.latest_metric.cpu_usage)"
-                      ></circle>
-                    </svg>
-                    <!-- Centered Value -->
-                    <div class="absolute inset-0 flex items-center justify-center flex-col">
-                      <span class="text-sm font-bold font-sans text-gray-100">{{ server.latest_metric.cpu_usage }}%</span>
+              <!-- Resource Stats (Only if active/online or has metrics) -->
+              <div v-if="server.latest_metric" class="space-y-3 mb-6">
+
+                <!-- CPU Stat Bar -->
+                <div class="stat-bar-card group">
+                  <div class="flex items-center gap-2.5 mb-2">
+                    <!-- CPU Icon -->
+                    <div class="stat-icon-wrap bg-sky-500/10 text-sky-400 border-sky-500/20">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H7a2 2 0 00-2 2v2M9 3h6M9 3v2m6-2h2a2 2 0 012 2v2m0 0V7m0 0h-2M3 9v6m0 0v2a2 2 0 002 2h2m-4-4h2m14-8v6m0 0v2a2 2 0 01-2 2h-2m4-4h-2M9 21h6m-6 0v-2m6 2v-2M9 19H7a2 2 0 01-2-2v-2m4 4h6" />
+                      </svg>
                     </div>
+                    <span class="text-xs font-semibold text-gray-300 tracking-wide">CPU Usage</span>
+                    <div class="ml-auto flex items-center gap-2">
+                      <span class="text-xs font-mono" :class="getUsageStatus(server.latest_metric.cpu_usage).cls">{{ getUsageStatus(server.latest_metric.cpu_usage).label }}</span>
+                      <span class="text-sm font-bold font-mono text-white">{{ server.latest_metric.cpu_usage }}<span class="text-gray-500 text-xs">%</span></span>
+                    </div>
+                  </div>
+                  <div class="stat-track">
+                    <div 
+                      class="stat-fill bg-gradient-to-r shadow-sm"
+                      :class="[getBarGradient(server.latest_metric.cpu_usage), getBarGlow(server.latest_metric.cpu_usage)]"
+                      :style="{ width: (server.latest_metric.cpu_usage || 0) + '%' }"
+                    ></div>
                   </div>
                 </div>
 
-                <!-- RAM Gauge -->
-                <div class="flex flex-col items-center p-3 bg-white/2 rounded-xl border border-white/5 text-center">
-                  <span class="text-3xs text-gray-500 uppercase tracking-wider mb-2">Memory</span>
-                  <div class="relative w-20 h-20">
-                    <svg class="gauge-svg w-20 h-20">
-                      <!-- Base Track -->
-                      <circle class="gauge-track" cx="40" cy="40" :r="RADIUS" stroke-width="6" fill="transparent"></circle>
-                      <!-- Progress bar -->
-                      <circle 
-                        class="gauge-progress"
-                        :class="getGaugeColor(server.latest_metric.ram_usage)"
-                        cx="40" cy="40" :r="RADIUS" stroke-width="6" fill="transparent"
-                        :stroke-dasharray="CIRCUMFERENCE"
-                        :stroke-dashoffset="strokeDashoffset(server.latest_metric.ram_usage)"
-                      ></circle>
-                    </svg>
-                    <!-- Centered Value -->
-                    <div class="absolute inset-0 flex items-center justify-center flex-col">
-                      <span class="text-sm font-bold font-sans text-gray-100">{{ server.latest_metric.ram_usage }}%</span>
+                <!-- RAM Stat Bar -->
+                <div class="stat-bar-card group">
+                  <div class="flex items-center gap-2.5 mb-2">
+                    <!-- RAM Icon -->
+                    <div class="stat-icon-wrap bg-violet-500/10 text-violet-400 border-violet-500/20">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
                     </div>
+                    <span class="text-xs font-semibold text-gray-300 tracking-wide">Memory</span>
+                    <div class="ml-auto flex items-center gap-2">
+                      <span class="text-xs font-mono" :class="getUsageStatus(server.latest_metric.ram_usage).cls">{{ getUsageStatus(server.latest_metric.ram_usage).label }}</span>
+                      <span class="text-sm font-bold font-mono text-white">{{ server.latest_metric.ram_usage }}<span class="text-gray-500 text-xs">%</span></span>
+                    </div>
+                  </div>
+                  <div class="stat-track">
+                    <div 
+                      class="stat-fill bg-gradient-to-r shadow-sm"
+                      :class="[getBarGradient(server.latest_metric.ram_usage), getBarGlow(server.latest_metric.ram_usage)]"
+                      :style="{ width: (server.latest_metric.ram_usage || 0) + '%' }"
+                    ></div>
                   </div>
                 </div>
 
-                <!-- Disk Gauge -->
-                <div class="flex flex-col items-center p-3 bg-white/2 rounded-xl border border-white/5 text-center">
-                  <span class="text-3xs text-gray-500 uppercase tracking-wider mb-2">Storage</span>
-                  <div class="relative w-20 h-20">
-                    <svg class="gauge-svg w-20 h-20">
-                      <!-- Base Track -->
-                      <circle class="gauge-track" cx="40" cy="40" :r="RADIUS" stroke-width="6" fill="transparent"></circle>
-                      <!-- Progress bar -->
-                      <circle 
-                        class="gauge-progress"
-                        :class="getGaugeColor(server.latest_metric.disk_usage)"
-                        cx="40" cy="40" :r="RADIUS" stroke-width="6" fill="transparent"
-                        :stroke-dasharray="CIRCUMFERENCE"
-                        :stroke-dashoffset="strokeDashoffset(server.latest_metric.disk_usage)"
-                      ></circle>
-                    </svg>
-                    <!-- Centered Value -->
-                    <div class="absolute inset-0 flex items-center justify-center flex-col">
-                      <span class="text-sm font-bold font-sans text-gray-100">{{ server.latest_metric.disk_usage }}%</span>
+                <!-- Disk Stat Bar -->
+                <div class="stat-bar-card group">
+                  <div class="flex items-center gap-2.5 mb-2">
+                    <!-- Disk Icon -->
+                    <div class="stat-icon-wrap bg-orange-500/10 text-orange-400 border-orange-500/20">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                      </svg>
+                    </div>
+                    <span class="text-xs font-semibold text-gray-300 tracking-wide">Storage</span>
+                    <div class="ml-auto flex items-center gap-2">
+                      <span class="text-xs font-mono" :class="getUsageStatus(server.latest_metric.disk_usage).cls">{{ getUsageStatus(server.latest_metric.disk_usage).label }}</span>
+                      <span class="text-sm font-bold font-mono text-white">{{ server.latest_metric.disk_usage }}<span class="text-gray-500 text-xs">%</span></span>
                     </div>
                   </div>
+                  <div class="stat-track">
+                    <div 
+                      class="stat-fill bg-gradient-to-r shadow-sm"
+                      :class="[getBarGradient(server.latest_metric.disk_usage), getBarGlow(server.latest_metric.disk_usage)]"
+                      :style="{ width: (server.latest_metric.disk_usage || 0) + '%' }"
+                    ></div>
+                  </div>
                 </div>
+
               </div>
 
               <!-- Uninstalled/Pending warning -->
-              <div v-else class="p-5 bg-white/2 border border-white/5 rounded-xl text-center mb-6">
-                <svg class="w-8 h-8 text-gray-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span class="text-xs text-gray-500">Awaiting agent installation. Run the setup command on your VPS to begin reporting.</span>
+              <div v-else class="flex items-center gap-3 p-4 bg-white/2 border border-white/5 rounded-xl mb-6">
+                <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center border border-white/5">
+                  <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold text-gray-400">No metrics yet</p>
+                  <p class="text-2xs text-gray-600 mt-0.5">Run the setup command on your VPS to start reporting.</p>
+                </div>
               </div>
             </div>
 
