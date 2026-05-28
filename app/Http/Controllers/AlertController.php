@@ -10,9 +10,19 @@ class AlertController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+
+        // Admin sees all rules, user sees own rules
+        $rules = $user->isAdmin()
+            ? AlertRule::with('server:id,name')->get()
+            : $user->alertRules()->with('server:id,name')->get();
+
+        // Server dropdown filtered by accessible servers
+        $servers = $user->accessibleServers()->select('id', 'name')->get();
+
         return Inertia::render('Alerts', [
-            'rules' => $request->user()->alertRules()->with('server:id,name')->get(),
-            'servers' => $request->user()->servers()->select('id', 'name')->get(),
+            'rules' => $rules,
+            'servers' => $servers,
         ]);
     }
 
@@ -27,15 +37,19 @@ class AlertController extends Controller
             'whatsapp_number' => 'required|string|max:20',
         ]);
 
-        // Verify server ownership if specified
+        $user = $request->user();
+
+        // Verify server access if specified
         if ($validated['server_id']) {
-            $owns = $request->user()->servers()->where('id', $validated['server_id'])->exists();
-            if (!$owns) {
+            $hasAccess = $user->accessibleServers()
+                ->where('servers.id', $validated['server_id'])
+                ->exists();
+            if (! $hasAccess) {
                 abort(403);
             }
         }
 
-        $request->user()->alertRules()->create($validated);
+        $user->alertRules()->create($validated);
 
         return redirect()->back()->with('flash', [
             'success' => 'Alert rule created successfully.',
@@ -44,7 +58,8 @@ class AlertController extends Controller
 
     public function update(Request $request, AlertRule $alert)
     {
-        if ($alert->user_id !== $request->user()->id) {
+        $user = $request->user();
+        if (! $user->isAdmin() && $alert->user_id !== $user->id) {
             abort(403);
         }
 
@@ -67,7 +82,8 @@ class AlertController extends Controller
 
     public function destroy(Request $request, AlertRule $alert)
     {
-        if ($alert->user_id !== $request->user()->id) {
+        $user = $request->user();
+        if (! $user->isAdmin() && $alert->user_id !== $user->id) {
             abort(403);
         }
 

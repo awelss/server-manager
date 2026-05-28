@@ -31,6 +31,14 @@ class Server extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Users assigned to this server via pivot table.
+     */
+    public function assignedUsers()
+    {
+        return $this->belongsToMany(User::class, 'server_user')->withTimestamps();
+    }
+
     public function logs()
     {
         return $this->hasMany(ServerLog::class);

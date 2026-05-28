@@ -12,7 +12,9 @@ class ServerController extends Controller
 {
     public function index(Request $request)
     {
-        $servers = $request->user()->servers()
+        $user = $request->user();
+
+        $servers = $user->accessibleServers()
             ->with('latestMetric')
             ->orderBy('name')
             ->get()
@@ -52,7 +54,10 @@ class ServerController extends Controller
 
     public function destroy(Request $request, Server $server)
     {
-        if ($server->user_id !== $request->user()->id) {
+        $user = $request->user();
+
+        // Admin can delete any server, user can only delete own servers
+        if (! $user->isAdmin() && $server->user_id !== $user->id) {
             abort(403);
         }
 
@@ -65,9 +70,7 @@ class ServerController extends Controller
 
     public function metrics(Request $request, Server $server)
     {
-        if ($server->user_id !== $request->user()->id) {
-            abort(403);
-        }
+        $this->authorizeServerAccess($request->user(), $server);
 
         $metrics = $server->metrics()
             ->select('cpu_usage', 'ram_usage', 'disk_usage', 'created_at')
@@ -82,9 +85,7 @@ class ServerController extends Controller
 
     public function logs(Request $request, Server $server)
     {
-        if ($server->user_id !== $request->user()->id) {
-            abort(403);
-        }
+        $this->authorizeServerAccess($request->user(), $server);
 
         $logs = $server->logs()
             ->orderByDesc('logged_at')
@@ -94,5 +95,17 @@ class ServerController extends Controller
             'server' => $server->only('id', 'name', 'ip_address'),
             'logs' => $logs,
         ]);
+    }
+
+    private function authorizeServerAccess($user, Server $server): void
+    {
+        if ($user->isAdmin()) {
+            return;
+        }
+
+        $accessible = $user->accessibleServers()->pluck('servers.id');
+        if (! $accessible->contains($server->id)) {
+            abort(403);
+        }
     }
 }

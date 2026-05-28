@@ -94,10 +94,7 @@ const submit = () => {
       </PrimaryButton>
 
       <p class="text-center text-sm text-gray-500">
-        Don't have an account?
-        <Link :href="route('register')" class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
-          Create one
-        </Link>
+        Contact your administrator to get an account.
       </p>
     </form>
   </GuestLayout>
