@@ -1,0 +1,47 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: server-manager-app
+    restart: unless-stopped
+    ports:
+      - "8683:80"
+      - "8684:8080"
+    volumes:
+      - .:/var/www/html
+      - ./storage/app:/var/www/html/storage/app
+      - ./storage/logs:/var/www/html/storage/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - APP_ENV=production
+    networks:
+      - server-manager
+
+  db:
+    image: mariadb:11
+    container_name: server-manager-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MARIADB_DATABASE: ${DB_DATABASE:-server_manager}
+      MARIADB_USER: ${DB_USERNAME:-server_manager}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - server-manager
+
+volumes:
+  db_data:
+
+networks:
+  server-manager:
+    driver: bridge

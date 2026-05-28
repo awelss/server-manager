@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+/* Theme configuration (migrated from tailwind.config.js) */
+@theme {
+  --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* ===== Premium Visual Design System - VPS Control Hub ===== */
+
+:root {
+  --color-bg: #090d16;
+  --color-surface: #101726;
+  --color-glass-bg: rgba(16, 23, 38, 0.6);
+  --color-glass-border: rgba(255, 255, 255, 0.07);
+  --color-glass-highlight: rgba(255, 255, 255, 0.12);
+
+  --color-primary: #6366f1; /* Indigo */
+  --color-success: #10b981; /* Emerald/Cyan */
+  --color-warning: #f59e0b; /* Amber */
+  --color-danger: #ef4444;  /* Red */
+  --color-info: #06b6d4;    /* Cyan */
+}
+
+/* Glassmorphism Panel styles */
+.glass-panel {
+  background: var(--color-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-glass-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel:hover {
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 12px 40px 0 rgba(99, 102, 241, 0.15);
+  transform: translateY(-2px);
+}
+
+/* High-fidelity Neon Glows */
+.glow-success {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+}
+
+.glow-info {
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+}
+
+.glow-warning {
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+}
+
+.glow-danger {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+}
+
+.glow-primary {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.25);
+}
+
+/* Pulse Heartbeat Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 8px currentColor;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.7;
+    box-shadow: 0 0 16px currentColor;
+  }
+}
+
+.pulse-active {
+  color: var(--color-success);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+.pulse-pending {
+  color: var(--color-warning);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+.pulse-offline {
+  color: var(--color-danger);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+/* Gauge SVG Meter styles */
+.gauge-svg {
+  transform: rotate(-90deg);
+}
+
+.gauge-track {
+  stroke: rgba(255, 255, 255, 0.05);
+}
+
+.gauge-progress {
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s ease-in-out;
+}
+
+/* Shimmer/Glance effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, #a5b4fc, #e0e7ff, #a5b4fc);
+  background-size: 200% auto;
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: shimmer 4s linear infinite;
+}
+
+/* Terminal & Console Styles */
+.console-bg {
+  background-color: #05070c;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
