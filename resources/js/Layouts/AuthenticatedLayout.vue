@@ -3,12 +3,15 @@ import { ref } from 'vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import { DropdownMenu, DropdownMenuItem } from '@/Components/ui/dropdown-menu';
 import { Avatar } from '@/Components/ui/avatar';
 import { Sheet } from '@/Components/ui/sheet';
 import { Link } from '@inertiajs/vue3';
 
 const sidebarOpen = ref(false);
+const userMenuOpen = ref(false);
+
+const toggleUserMenu = () => { userMenuOpen.value = !userMenuOpen.value; };
+const closeUserMenu = () => { userMenuOpen.value = false; };
 </script>
 
 <template>
@@ -40,39 +43,88 @@ const sidebarOpen = ref(false);
           </svg>
           Alerts
         </NavLink>
+
+        <!-- Admin Section -->
+        <template v-if="$page.props.auth.user.role === 'admin'">
+          <div class="my-4 h-px bg-white/5"></div>
+          <div class="px-4 mb-2">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-gray-600">Admin</span>
+          </div>
+          <NavLink :href="route('admin.users.index')" :active="route().current('admin.users.*')">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+            </svg>
+            Users
+          </NavLink>
+        </template>
       </nav>
 
       <!-- User Section -->
       <div class="border-t border-white/5 p-4">
-        <DropdownMenu align="left">
-          <template #trigger>
-            <button class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-gray-400 transition-all hover:bg-white/5 hover:text-white">
-              <Avatar :name="$page.props.auth.user.name" size="sm" />
-              <div class="flex-1 text-left min-w-0">
-                <div class="truncate font-medium text-gray-200">{{ $page.props.auth.user.name }}</div>
-                <div class="truncate text-xs text-gray-500">{{ $page.props.auth.user.email }}</div>
+        <div class="relative">
+          <!-- Trigger -->
+          <button
+            @click="toggleUserMenu"
+            class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-gray-400 transition-all hover:bg-white/5 hover:text-white"
+            :class="{ 'bg-white/5 text-white': userMenuOpen }"
+          >
+            <Avatar :name="$page.props.auth.user.name" size="sm" />
+            <div class="flex-1 text-left min-w-0">
+              <div class="truncate font-medium text-gray-200">{{ $page.props.auth.user.name }}</div>
+              <div class="truncate text-xs text-gray-500">{{ $page.props.auth.user.email }}</div>
+            </div>
+            <svg
+              class="h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200"
+              :class="{ 'rotate-180': userMenuOpen }"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+            </svg>
+          </button>
+
+          <!-- Upward Dropdown Panel -->
+          <Transition
+            enter-active-class="transition duration-150 ease-out"
+            enter-from-class="opacity-0 translate-y-2"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-100 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 translate-y-2"
+          >
+            <div v-if="userMenuOpen">
+              <!-- Backdrop to close on outside click -->
+              <div class="fixed inset-0 z-40" @click="closeUserMenu"></div>
+              <!-- Panel -->
+              <div
+                class="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-white/8 bg-slate-900 shadow-2xl shadow-black/50 overflow-hidden z-50"
+              >
+                <Link
+                  :href="route('profile.edit')"
+                  class="flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                  @click="closeUserMenu"
+                >
+                  <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                  Profile
+                </Link>
+                <div class="h-px bg-white/5 mx-3"></div>
+                <Link
+                  :href="route('logout')"
+                  method="post"
+                  as="button"
+                  class="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-gray-300 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                  @click="closeUserMenu"
+                >
+                  <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                  </svg>
+                  Log Out
+                </Link>
               </div>
-              <svg class="h-4 w-4 shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
-              </svg>
-            </button>
-          </template>
-          <template #content="{ close }">
-            <DropdownMenuItem as="a" :href="route('profile.edit')" @click="close">
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-              Profile
-            </DropdownMenuItem>
-            <div class="my-1 h-px bg-white/5"></div>
-            <Link :href="route('logout')" method="post" as="button" class="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-white/5 hover:text-white" @click="close">
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-              </svg>
-              Log Out
-            </Link>
-          </template>
-        </DropdownMenu>
+            </div>
+          </Transition>
+        </div>
       </div>
     </aside>
 
