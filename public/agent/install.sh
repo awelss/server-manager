@@ -45,7 +45,7 @@ cat <<EOF > /etc/vps-agent/config.json
   "agent_token": "${TOKEN}",
   "log_files": [],
   "health_urls": [],
-  "backup_paths": ["/var/backups", "/opt/backups", "/backup", "/root/backups"]
+  "backup_paths": ["/opt/backups", "/backup", "/root/backups"]
 }
 EOF
 chmod 600 /etc/vps-agent/config.json
