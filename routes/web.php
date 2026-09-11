@@ -19,6 +19,7 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [ServerController::class, 'index'])->name('dashboard');
+    Route::get('/infrastructure', [ServerController::class, 'infrastructure'])->name('infrastructure');
     Route::post('/dashboard/servers', [ServerController::class, 'store'])->name('servers.store');
     Route::delete('/dashboard/servers/{server}', [ServerController::class, 'destroy'])->name('servers.destroy');
     Route::get('/dashboard/servers/{server}/metrics', [ServerController::class, 'metrics'])->name('servers.metrics');
@@ -26,7 +27,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('alerts', AlertController::class)->only(['index', 'store', 'update', 'destroy']);
 });
 
-// Admin-only routes
 Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->group(function () {
     Route::get('/users', [UserController::class, 'index'])->name('admin.users.index');
     Route::post('/users', [UserController::class, 'store'])->name('admin.users.store');
