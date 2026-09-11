@@ -8,16 +8,16 @@ use Inertia\Inertia;
 
 class AlertController extends Controller
 {
+    private const METRICS = 'cpu,ram,disk,steal,iowait,swap,zombie,processes,load1,inode';
+
     public function index(Request $request)
     {
         $user = $request->user();
 
-        // Admin sees all rules, user sees own rules
         $rules = $user->isAdmin()
             ? AlertRule::with('server:id,name')->get()
             : $user->alertRules()->with('server:id,name')->get();
 
-        // Server dropdown filtered by accessible servers
         $servers = $user->accessibleServers()->select('id', 'name')->get();
 
         return Inertia::render('Alerts', [
@@ -30,21 +30,22 @@ class AlertController extends Controller
     {
         $validated = $request->validate([
             'server_id' => 'nullable|exists:servers,id',
-            'metric' => 'required|in:cpu,ram,disk',
+            'metric' => 'required|in:'.self::METRICS,
             'operator' => 'required|in:>,>=,<,<=',
-            'threshold' => 'required|numeric|min:0|max:100',
-            'cooldown_minutes' => 'required|integer|min:1|max:1440',
+            'threshold' => 'required|numeric|min:0|max:1000000',
+            'for_minutes' => 'required|integer|min:0|max:1440',
+            'cooldown_minutes' => 'required|integer|min:1|max:10080',
+            'recovery_enabled' => 'required|boolean',
             'whatsapp_number' => 'required|string|max:20',
         ]);
 
         $user = $request->user();
 
-        // Verify server access if specified
         if ($validated['server_id']) {
             $hasAccess = $user->accessibleServers()
                 ->where('servers.id', $validated['server_id'])
                 ->exists();
-            if (! $hasAccess) {
+            if (!$hasAccess) {
                 abort(403);
             }
         }
@@ -59,19 +60,30 @@ class AlertController extends Controller
     public function update(Request $request, AlertRule $alert)
     {
         $user = $request->user();
-        if (! $user->isAdmin() && $alert->user_id !== $user->id) {
+        if (!$user->isAdmin() && $alert->user_id !== $user->id) {
             abort(403);
         }
 
         $validated = $request->validate([
             'enabled' => 'sometimes|boolean',
             'server_id' => 'nullable|exists:servers,id',
-            'metric' => 'sometimes|in:cpu,ram,disk',
+            'metric' => 'sometimes|in:'.self::METRICS,
             'operator' => 'sometimes|in:>,>=,<,<=',
-            'threshold' => 'sometimes|numeric|min:0|max:100',
-            'cooldown_minutes' => 'sometimes|integer|min:1|max:1440',
+            'threshold' => 'sometimes|numeric|min:0|max:1000000',
+            'for_minutes' => 'sometimes|integer|min:0|max:1440',
+            'cooldown_minutes' => 'sometimes|integer|min:1|max:10080',
+            'recovery_enabled' => 'sometimes|boolean',
             'whatsapp_number' => 'sometimes|string|max:20',
         ]);
+
+        if (array_key_exists('server_id', $validated) && $validated['server_id']) {
+            $hasAccess = $user->accessibleServers()
+                ->where('servers.id', $validated['server_id'])
+                ->exists();
+            if (!$hasAccess) {
+                abort(403);
+            }
+        }
 
         $alert->update($validated);
 
@@ -83,7 +95,7 @@ class AlertController extends Controller
     public function destroy(Request $request, AlertRule $alert)
     {
         $user = $request->user();
-        if (! $user->isAdmin() && $alert->user_id !== $user->id) {
+        if (!$user->isAdmin() && $alert->user_id !== $user->id) {
             abort(403);
         }
 
