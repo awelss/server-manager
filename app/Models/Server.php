@@ -17,13 +17,23 @@ class Server extends Model
         'ram_total',
         'disk_total',
         'last_seen_at',
+        'service_status',
+        'docker_status',
+        'backup_status',
+        'http_checks',
+        'status_checked_at',
     ];
 
     protected $casts = [
         'last_seen_at' => 'datetime',
+        'status_checked_at' => 'datetime',
         'cpu_cores' => 'integer',
         'ram_total' => 'double',
         'disk_total' => 'double',
+        'service_status' => 'array',
+        'docker_status' => 'array',
+        'backup_status' => 'array',
+        'http_checks' => 'array',
     ];
 
     public function user()
@@ -31,9 +41,6 @@ class Server extends Model
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Users assigned to this server via pivot table.
-     */
     public function assignedUsers()
     {
         return $this->belongsToMany(User::class, 'server_user')->withTimestamps();
@@ -49,18 +56,11 @@ class Server extends Model
         return $this->hasMany(ServerMetric::class);
     }
 
-    /**
-     * Get the latest metric for the server.
-     */
     public function latestMetric()
     {
         return $this->hasOne(ServerMetric::class)->latestOfMany();
     }
 
-    /**
-     * Determine if the server is currently online.
-     * We consider a server online if we've heard from it in the last 15 seconds.
-     */
     public function getIsOnlineAttribute(): bool
     {
         if (!$this->last_seen_at) {
