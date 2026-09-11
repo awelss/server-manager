@@ -1,248 +1,210 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
-  rules: Array,
-  servers: Array,
+  rules: { type: Array, required: true },
+  servers: { type: Array, required: true },
 });
 
 const showForm = ref(false);
+const metricOptions = [
+  ['cpu', 'CPU Usage', '%'],
+  ['ram', 'RAM Usage', '%'],
+  ['disk', 'Disk Usage', '%'],
+  ['steal', 'CPU Steal', '%'],
+  ['iowait', 'I/O Wait', '%'],
+  ['swap', 'Swap Usage', '%'],
+  ['inode', 'Inode Usage', '%'],
+  ['zombie', 'Zombie Processes', 'count'],
+  ['processes', 'Process Count', 'count'],
+  ['load1', 'Load Average (1m)', 'load'],
+];
 
 const form = useForm({
   server_id: '',
   metric: 'cpu',
   operator: '>',
-  threshold: 80,
-  cooldown_minutes: 15,
+  threshold: 85,
+  for_minutes: 5,
+  cooldown_minutes: 30,
+  recovery_enabled: true,
   whatsapp_number: '',
 });
 
-const submit = () => {
+const selectedMetric = computed(() => metricOptions.find(x => x[0] === form.metric) || metricOptions[0]);
+
+function submit() {
   form.post(route('alerts.store'), {
     preserveScroll: true,
     onSuccess: () => {
       form.reset();
+      form.metric = 'cpu';
+      form.operator = '>';
+      form.threshold = 85;
+      form.for_minutes = 5;
+      form.cooldown_minutes = 30;
+      form.recovery_enabled = true;
       showForm.value = false;
     },
   });
-};
+}
 
-const toggleEnabled = (rule) => {
-  router.patch(route('alerts.update', rule.id), {
-    enabled: !rule.enabled,
-  }, {
-    preserveScroll: true,
-  });
-};
+function toggleEnabled(rule) {
+  router.patch(route('alerts.update', rule.id), { enabled: !rule.enabled }, { preserveScroll: true });
+}
 
-const deleteRule = (rule) => {
+function deleteRule(rule) {
   if (confirm('Delete this alert rule?')) {
-    router.delete(route('alerts.destroy', rule.id), {
-      preserveScroll: true,
-    });
+    router.delete(route('alerts.destroy', rule.id), { preserveScroll: true });
   }
-};
+}
 
-const metricLabels = { cpu: 'CPU', ram: 'RAM', disk: 'Disk' };
-const metricColors = {
-  cpu: 'text-blue-400',
-  ram: 'text-purple-400',
-  disk: 'text-amber-400',
-};
+function metricLabel(metric) {
+  return metricOptions.find(x => x[0] === metric)?.[1] || metric.toUpperCase();
+}
 
-const formatLastTriggered = (date) => {
+function metricUnit(metric) {
+  return metricOptions.find(x => x[0] === metric)?.[2] || '';
+}
+
+function valueText(metric, value) {
+  const unit = metricUnit(metric);
+  if (unit === '%') return `${value}%`;
+  if (unit === 'count') return `${value}`;
+  return `${value}`;
+}
+
+function age(date) {
   if (!date) return 'Never';
-  const d = new Date(date);
-  const now = new Date();
-  const diffMs = now - d;
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${Math.floor(diffHours / 24)}d ago`;
-};
+  const mins = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
+  return `${Math.floor(mins / 1440)}d ago`;
+}
 </script>
 
 <template>
-  <Head title="Alert Rules" />
+  <Head title="Smart Alerts" />
 
   <AuthenticatedLayout>
     <template #header>
-      <div class="flex justify-between items-center w-full">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between w-full">
         <div>
-          <h2 class="text-2xl font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-cyan-400 font-sans">
-            Alert Rules
-          </h2>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Configure threshold-based WhatsApp notifications</p>
+          <h2 class="text-2xl font-extrabold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-cyan-400">Smart Alerts</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Sustained thresholds, cooldowns and recovery notifications</p>
         </div>
-        <button
-          @click="showForm = !showForm"
-          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold tracking-wide shadow-lg border border-white/10 glow-primary transition-all flex items-center gap-1.5"
-        >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
-          </svg>
-          Add Rule
-        </button>
+        <div class="flex gap-2">
+          <Link :href="route('infrastructure')" class="px-3 py-2 bg-white/5 border border-white/10 text-gray-300 rounded-lg text-xs hover:bg-white/10">Infrastructure</Link>
+          <button @click="showForm = !showForm" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-semibold">Add Rule</button>
+        </div>
       </div>
     </template>
 
-    <div class="py-10 bg-slate-950/20 min-h-screen text-gray-200">
-      <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
-
-        <!-- Add Rule Form -->
-        <div v-if="showForm" class="glass-panel rounded-2xl p-6 border border-white/5 bg-slate-900/30">
-          <h3 class="text-sm font-bold text-gray-200 mb-4 font-mono tracking-wider uppercase">New Alert Rule</h3>
-          <form @submit.prevent="submit" class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <!-- Server -->
-              <div>
-                <label class="block text-xs text-gray-500 mb-1 font-mono">Server</label>
-                <select v-model="form.server_id" class="w-full bg-slate-800/80 border border-white/10 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500">
+    <div class="py-8 min-h-screen bg-slate-950/20 text-gray-200">
+      <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 space-y-5">
+        <div v-if="showForm" class="glass-panel rounded-2xl border border-white/5 bg-slate-900/30 p-6">
+          <form @submit.prevent="submit" class="space-y-5">
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <label class="space-y-1">
+                <span class="text-xs text-gray-500">Server</span>
+                <select v-model="form.server_id" class="w-full rounded-lg bg-slate-800/80 border-white/10 text-sm text-gray-200">
                   <option value="">All My Servers</option>
                   <option v-for="s in servers" :key="s.id" :value="s.id">{{ s.name }}</option>
                 </select>
-              </div>
+              </label>
 
-              <!-- Metric -->
-              <div>
-                <label class="block text-xs text-gray-500 mb-1 font-mono">Metric</label>
-                <select v-model="form.metric" class="w-full bg-slate-800/80 border border-white/10 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500">
-                  <option value="cpu">CPU Usage</option>
-                  <option value="ram">RAM Usage</option>
-                  <option value="disk">Disk Usage</option>
+              <label class="space-y-1">
+                <span class="text-xs text-gray-500">Metric</span>
+                <select v-model="form.metric" class="w-full rounded-lg bg-slate-800/80 border-white/10 text-sm text-gray-200">
+                  <option v-for="m in metricOptions" :key="m[0]" :value="m[0]">{{ m[1] }}</option>
                 </select>
-              </div>
+              </label>
 
-              <!-- Operator + Threshold -->
-              <div>
-                <label class="block text-xs text-gray-500 mb-1 font-mono">Condition</label>
+              <label class="space-y-1">
+                <span class="text-xs text-gray-500">WhatsApp</span>
+                <input v-model="form.whatsapp_number" required placeholder="6281234567890" class="w-full rounded-lg bg-slate-800/80 border-white/10 text-sm text-gray-200" />
+              </label>
+
+              <div class="space-y-1">
+                <span class="text-xs text-gray-500">Condition</span>
                 <div class="flex gap-2">
-                  <select v-model="form.operator" class="w-20 bg-slate-800/80 border border-white/10 text-gray-300 text-sm rounded-lg px-2 py-2 focus:ring-indigo-500 focus:border-indigo-500">
-                    <option value=">">></option>
-                    <option value=">=">>=</option>
-                    <option value="<"><</option>
-                    <option value="<="><=</option>
+                  <select v-model="form.operator" class="w-24 rounded-lg bg-slate-800/80 border-white/10 text-sm text-gray-200">
+                    <option value=">">&gt;</option>
+                    <option value=">=">&gt;=</option>
+                    <option value="<">&lt;</option>
+                    <option value="<=">&lt;=</option>
                   </select>
                   <div class="relative flex-1">
-                    <input v-model="form.threshold" type="number" min="0" max="100" step="0.1"
-                      class="w-full bg-slate-800/80 border border-white/10 text-gray-300 text-sm rounded-lg px-3 py-2 pr-8 focus:ring-indigo-500 focus:border-indigo-500" />
-                    <span class="absolute right-3 top-2 text-gray-500 text-sm">%</span>
+                    <input v-model="form.threshold" type="number" min="0" step="0.1" required class="w-full rounded-lg bg-slate-800/80 border-white/10 text-sm text-gray-200" />
+                    <span class="absolute right-3 top-2.5 text-xs text-gray-500">{{ selectedMetric[2] === '%' ? '%' : '' }}</span>
                   </div>
                 </div>
               </div>
 
-              <!-- Cooldown -->
-              <div>
-                <label class="block text-xs text-gray-500 mb-1 font-mono">Cooldown (minutes)</label>
-                <input v-model="form.cooldown_minutes" type="number" min="1" max="1440"
-                  class="w-full bg-slate-800/80 border border-white/10 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500" />
-              </div>
+              <label class="space-y-1">
+                <span class="text-xs text-gray-500">Must stay breached for</span>
+                <div class="relative">
+                  <input v-model="form.for_minutes" type="number" min="0" max="1440" required class="w-full rounded-lg bg-slate-800/80 border-white/10 text-sm text-gray-200 pr-14" />
+                  <span class="absolute right-3 top-2.5 text-xs text-gray-500">min</span>
+                </div>
+              </label>
 
-              <!-- WhatsApp Number -->
-              <div class="col-span-2">
-                <label class="block text-xs text-gray-500 mb-1 font-mono">WhatsApp Number (with country code)</label>
-                <input v-model="form.whatsapp_number" type="text" placeholder="6281234567890"
-                  class="w-full bg-slate-800/80 border border-white/10 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500" />
-              </div>
+              <label class="space-y-1">
+                <span class="text-xs text-gray-500">Repeat cooldown</span>
+                <div class="relative">
+                  <input v-model="form.cooldown_minutes" type="number" min="1" max="10080" required class="w-full rounded-lg bg-slate-800/80 border-white/10 text-sm text-gray-200 pr-14" />
+                  <span class="absolute right-3 top-2.5 text-xs text-gray-500">min</span>
+                </div>
+              </label>
             </div>
 
-            <div class="flex justify-end gap-3 pt-2">
-              <button type="button" @click="showForm = false"
-                class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 rounded-lg text-sm transition-all">
-                Cancel
-              </button>
-              <button type="submit" :disabled="form.processing"
-                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-semibold glow-primary border border-white/10 transition-all disabled:opacity-50">
-                Create Rule
-              </button>
+            <label class="flex items-center gap-3 text-sm text-gray-300">
+              <input v-model="form.recovery_enabled" type="checkbox" class="rounded border-white/20 bg-slate-800 text-indigo-500" />
+              Send WhatsApp recovery message when metric returns to normal
+            </label>
+
+            <div class="rounded-xl border border-cyan-500/10 bg-cyan-500/5 p-3 text-xs text-cyan-200/80">
+              Example: CPU &gt; 85%, sustained 5 min, cooldown 30 min. A short spike will not alert; a sustained breach will alert once, then repeat at most every 30 min until recovery.
+            </div>
+
+            <div class="flex justify-end gap-2">
+              <button type="button" @click="showForm = false" class="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-gray-400">Cancel</button>
+              <button type="submit" :disabled="form.processing" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm text-white font-semibold disabled:opacity-50">Create Rule</button>
             </div>
           </form>
         </div>
 
-        <!-- Empty State -->
-        <div v-if="rules.length === 0 && !showForm" class="glass-panel text-center p-16 rounded-2xl border border-white/5 bg-slate-900/40">
-          <div class="inline-flex p-4 rounded-full bg-amber-500/10 text-amber-400 mb-4 border border-amber-500/20">
-            <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-          </div>
-          <h3 class="text-xl font-bold text-gray-200">No Alert Rules</h3>
-          <p class="text-gray-400 mt-2 max-w-md mx-auto text-sm">
-            Set up threshold-based alerts to get notified via WhatsApp when your servers need attention.
-          </p>
-          <button @click="showForm = true"
-            class="mt-6 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold glow-primary border border-white/5 transition-all">
-            Create First Rule
-          </button>
+        <div v-if="rules.length === 0 && !showForm" class="glass-panel rounded-2xl border border-white/5 bg-slate-900/30 p-12 text-center">
+          <div class="text-lg font-bold">No alert rules</div>
+          <div class="text-sm text-gray-500 mt-2">Create sustained alerts for CPU, RAM, disk, steal, iowait, zombies and more.</div>
         </div>
 
-        <!-- Rules Table -->
-        <div v-if="rules.length > 0" class="glass-panel rounded-2xl border border-white/5 overflow-hidden">
-          <div class="divide-y divide-white/5">
-            <div v-for="rule in rules" :key="rule.id"
-              class="px-6 py-4 flex items-center justify-between hover:bg-white/2 transition-colors"
-              :class="{ 'opacity-40': !rule.enabled }"
-            >
-              <div class="flex items-center gap-4 flex-1">
-                <!-- Metric Badge -->
-                <span class="text-sm font-bold font-mono w-12" :class="metricColors[rule.metric]">
-                  {{ metricLabels[rule.metric] }}
-                </span>
+        <div v-for="rule in rules" :key="rule.id" class="glass-panel rounded-xl border border-white/5 bg-slate-900/30 p-4" :class="{ 'opacity-50': !rule.enabled }">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-bold text-gray-100">{{ metricLabel(rule.metric) }}</span>
+              <span class="font-mono text-cyan-300">{{ rule.operator }} {{ valueText(rule.metric, rule.threshold) }}</span>
+              <span class="text-2xs px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400">{{ rule.server?.name || 'All Servers' }}</span>
+              <span class="text-2xs px-2 py-0.5 rounded border" :class="rule.is_active ? 'border-red-500/20 bg-red-500/10 text-red-400' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'">{{ rule.is_active ? 'ACTIVE BREACH' : 'NORMAL' }}</span>
+            </div>
 
-                <!-- Condition -->
-                <span class="text-gray-300 font-mono text-sm">
-                  {{ rule.operator }} {{ rule.threshold }}%
-                </span>
-
-                <!-- Server -->
-                <span class="text-xs text-gray-500 bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                  {{ rule.server ? rule.server.name : 'All Servers' }}
-                </span>
-
-                <!-- WhatsApp -->
-                <span class="text-xs text-gray-500 font-mono">
-                  +{{ rule.whatsapp_number }}
-                </span>
-
-                <!-- Cooldown -->
-                <span class="text-2xs text-gray-600">
-                  {{ rule.cooldown_minutes }}min cooldown
-                </span>
-
-                <!-- Last Triggered -->
-                <span class="text-2xs" :class="rule.last_triggered_at ? 'text-amber-400' : 'text-gray-600'">
-                  {{ formatLastTriggered(rule.last_triggered_at) }}
-                </span>
-              </div>
-
-              <div class="flex items-center gap-2">
-                <!-- Toggle -->
-                <button @click="toggleEnabled(rule)"
-                  class="px-3 py-1 text-2xs font-mono uppercase tracking-widest rounded-lg border transition-all"
-                  :class="rule.enabled
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                    : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'"
-                >
-                  {{ rule.enabled ? 'ON' : 'OFF' }}
-                </button>
-
-                <!-- Delete -->
-                <button @click="deleteRule(rule)"
-                  class="p-1.5 bg-white/2 hover:bg-red-500/10 border border-white/5 hover:border-red-500/20 text-gray-500 hover:text-red-400 rounded-lg transition-all"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
+            <div class="flex items-center gap-2">
+              <button @click="toggleEnabled(rule)" class="px-3 py-1 rounded-lg border text-2xs uppercase font-bold" :class="rule.enabled ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-white/10 bg-white/5 text-gray-500'">{{ rule.enabled ? 'ON' : 'OFF' }}</button>
+              <button @click="deleteRule(rule)" class="px-3 py-1 rounded-lg border border-red-500/20 bg-red-500/5 text-2xs text-red-400">Delete</button>
             </div>
           </div>
-        </div>
 
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 text-xs">
+            <div><span class="block text-gray-600">Sustain</span><span class="text-gray-300">{{ rule.for_minutes }} min</span></div>
+            <div><span class="block text-gray-600">Cooldown</span><span class="text-gray-300">{{ rule.cooldown_minutes }} min</span></div>
+            <div><span class="block text-gray-600">Recovery</span><span class="text-gray-300">{{ rule.recovery_enabled ? 'On' : 'Off' }}</span></div>
+            <div><span class="block text-gray-600">Last alert</span><span class="text-gray-300">{{ age(rule.last_triggered_at) }}</span></div>
+            <div><span class="block text-gray-600">Last value</span><span class="text-gray-300">{{ rule.last_value == null ? '—' : valueText(rule.metric, rule.last_value) }}</span></div>
+          </div>
+        </div>
       </div>
     </div>
   </AuthenticatedLayout>
