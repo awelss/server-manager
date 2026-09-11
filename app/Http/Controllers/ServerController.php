@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Server;
-use App\Models\ServerMetric;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -25,7 +24,23 @@ class ServerController extends Controller
 
         return Inertia::render('Dashboard', [
             'servers' => $servers,
-            'apiBaseUrl' => url('/')
+            'apiBaseUrl' => url('/'),
+        ]);
+    }
+
+    public function infrastructure(Request $request)
+    {
+        $servers = $request->user()->accessibleServers()
+            ->with('latestMetric')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($server) {
+                $server->is_online = $server->is_online;
+                return $server;
+            });
+
+        return Inertia::render('Infrastructure', [
+            'servers' => $servers,
         ]);
     }
 
@@ -47,8 +62,8 @@ class ServerController extends Controller
             'success' => 'Server registered successfully!',
             'new_server' => [
                 'name' => $server->name,
-                'agent_token' => $server->agent_token
-            ]
+                'agent_token' => $server->agent_token,
+            ],
         ]);
     }
 
@@ -56,15 +71,14 @@ class ServerController extends Controller
     {
         $user = $request->user();
 
-        // Admin can delete any server, user can only delete own servers
-        if (! $user->isAdmin() && $server->user_id !== $user->id) {
+        if (!$user->isAdmin() && $server->user_id !== $user->id) {
             abort(403);
         }
 
         $server->delete();
 
         return redirect()->back()->with('flash', [
-            'success' => 'Server deleted successfully.'
+            'success' => 'Server deleted successfully.',
         ]);
     }
 
@@ -73,13 +87,31 @@ class ServerController extends Controller
         $this->authorizeServerAccess($request->user(), $server);
 
         $metrics = $server->metrics()
-            ->select('cpu_usage', 'ram_usage', 'disk_usage', 'created_at')
+            ->select([
+                'cpu_usage',
+                'cpu_iowait',
+                'cpu_steal',
+                'load_1',
+                'load_5',
+                'load_15',
+                'ram_usage',
+                'swap_usage',
+                'zombie_processes',
+                'process_count',
+                'disk_usage',
+                'disk_free_gb',
+                'inode_usage',
+                'network_rx_bytes',
+                'network_tx_bytes',
+                'uptime',
+                'created_at',
+            ])
             ->orderBy('created_at', 'asc')
             ->get();
 
         return response()->json([
             'status' => 'success',
-            'metrics' => $metrics
+            'metrics' => $metrics,
         ]);
     }
 
@@ -104,7 +136,7 @@ class ServerController extends Controller
         }
 
         $accessible = $user->accessibleServers()->pluck('servers.id');
-        if (! $accessible->contains($server->id)) {
+        if (!$accessible->contains($server->id)) {
             abort(403);
         }
     }
