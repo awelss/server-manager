@@ -58,7 +58,7 @@ while IFS= read -r line; do
 done < <(parse_config_array "backup_paths" 2>/dev/null || true)
 
 if [ ${#BACKUP_PATHS[@]} -eq 0 ]; then
-    BACKUP_PATHS=("/var/backups" "/opt/backups" "/backup" "/root/backups")
+    BACKUP_PATHS=("/opt/backups" "/backup" "/root/backups")
 fi
 
 get_os_info() {
@@ -147,8 +147,8 @@ get_network_bytes() {
 }
 
 post_json() {
-    local url="$1" data="$2"
-    curl -s -X POST \
+    local url="$1" data="$2" result
+    if result=$(curl -s -X POST \
         -H "Content-Type: application/json" \
         -H "X-Agent-Token: $TOKEN" \
         -H "Accept: application/json" \
@@ -156,11 +156,15 @@ post_json() {
         -o /dev/null -w "%{http_code}" \
         --connect-timeout 5 \
         --max-time 15 \
-        -d "$data" "$url" 2>/dev/null || echo "000"
+        -d "$data" "$url" 2>/dev/null); then
+        printf '%s' "$result"
+    else
+        printf '000'
+    fi
 }
 
 collect_services_json() {
-    local candidates=(nginx postgresql mariadb mysql redis-server redis docker cloudflared k3s)
+    local candidates=(nginx postgresql mariadb mysql redis-server redis docker cloudflared k3s php8.3-fpm php8.4-fpm)
     local entries="" unit state
 
     if ! command -v systemctl >/dev/null 2>&1; then
@@ -179,20 +183,15 @@ collect_services_json() {
         fi
     done
 
-    if command -v pm2 >/dev/null 2>&1; then
-        if pgrep -f 'PM2.*God Daemon' >/dev/null 2>&1; then
-            state="active"
-        else
-            state="inactive"
-        fi
-        entries="${entries}{\"name\":\"pm2\",\"state\":\"$state\"},"
+    if pgrep -f 'PM2.*God Daemon' >/dev/null 2>&1; then
+        entries="${entries}{\"name\":\"pm2\",\"state\":\"active\"},"
     fi
 
     printf '[%s]' "${entries%,}"
 }
 
 collect_docker_json() {
-    local entries="" stats name state status cpu mempct memusage restarts line
+    local entries="" stats name state status cpu mempct memusage restarts
 
     if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
         echo '[]'
@@ -260,7 +259,9 @@ collect_http_checks_json() {
     local entries="" url result code seconds latency ok
 
     for url in "${HEALTH_URLS[@]}"; do
-        result=$(curl -k -sS -o /dev/null -w '%{http_code}|%{time_total}' --connect-timeout 3 --max-time 8 "$url" 2>/dev/null || echo '000|0')
+        if ! result=$(curl -k -sS -o /dev/null -w '%{http_code}|%{time_total}' --connect-timeout 3 --max-time 8 "$url" 2>/dev/null); then
+            result='000|0'
+        fi
         code=${result%%|*}
         seconds=${result#*|}
         latency=$(awk "BEGIN { printf \"%.0f\", (${seconds:-0}) * 1000 }")
