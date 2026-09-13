@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ref, reactive, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import ServerModal from '@/Components/ServerModal.vue';
 
@@ -25,15 +25,37 @@ watch(() => props.servers, (newVal) => {
   subscribeToChannels();
 }, { deep: true });
 
+const search = ref('');
+const statusFilter = ref('all');
+const needsAttention = (server) => !server.is_online || ['cpu_usage', 'ram_usage', 'disk_usage'].some(key => Number(server.latest_metric?.[key]) >= 85);
+const summary = computed(() => ({
+  total: localServers.value.length,
+  online: localServers.value.filter(s => s.is_online).length,
+  pending: localServers.value.filter(s => !s.is_online && s.status === 'pending').length,
+  attention: localServers.value.filter(needsAttention).length,
+}));
+const filteredServers = computed(() => localServers.value.filter(server => {
+  const matchesSearch = `${server.name} ${server.ip_address}`.toLowerCase().includes(search.value.trim().toLowerCase());
+  const matchesStatus = statusFilter.value === 'all'
+    || (statusFilter.value === 'online' && server.is_online)
+    || (statusFilter.value === 'offline' && !server.is_online && server.status !== 'pending')
+    || (statusFilter.value === 'pending' && !server.is_online && server.status === 'pending')
+    || (statusFilter.value === 'attention' && needsAttention(server));
+  return matchesSearch && matchesStatus;
+}));
+const formatTime = (value) => value ? new Date(value).toLocaleString() : 'Awaiting agent';
 const isAddModalOpen = ref(false);
 const activeHistoryServerId = ref(null);
 const historyData = ref([]);
 const isHistoryLoading = ref(false);
+const historyError = ref('');
+let historyController = null;
 
 // Subscribe to Echo channels for real-time metric updates
 let subscribedChannels = [];
 
 const subscribeToChannels = () => {
+  if (!window.Echo) return;
   // Leave old channels
   subscribedChannels.forEach(ch => window.Echo.leave(ch));
   subscribedChannels = [];
@@ -54,6 +76,7 @@ const subscribeToChannels = () => {
             uptime: e.uptime,
           };
           s.is_online = true;
+          s.last_seen_at = e.timestamp;
         }
       });
   });
@@ -77,6 +100,7 @@ onUnmounted(() => {
   subscribedChannels.forEach(ch => window.Echo.leave(ch));
   subscribedChannels = [];
   if (pollInterval) clearInterval(pollInterval);
+  historyController?.abort();
 });
 
 // Manage Server Deletion
@@ -90,43 +114,40 @@ const deleteServer = (serverId, name) => {
 };
 
 // Fetch Historical Metrics on-demand
-const toggleHistory = async (serverId) => {
-  if (activeHistoryServerId.value === serverId) {
+const toggleHistory = async (serverId, retry = false) => {
+  historyController?.abort();
+  historyError.value = '';
+  historyData.value = [];
+  if (!retry && activeHistoryServerId.value === serverId) {
     activeHistoryServerId.value = null;
-    historyData.value = [];
+    isHistoryLoading.value = false;
     return;
   }
-  
+
   activeHistoryServerId.value = serverId;
   isHistoryLoading.value = true;
-  historyData.value = [];
-
+  const controller = new AbortController();
+  historyController = controller;
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch(`/dashboard/servers/${serverId}/metrics`);
+    const response = await fetch(`/dashboard/servers/${serverId}/metrics`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error('Unable to load metrics');
     const data = await response.json();
-    if (data.status === 'success') {
-      historyData.value = data.metrics;
-    }
+    if (data.status !== 'success' || !Array.isArray(data.metrics)) throw new Error('Invalid metrics');
+    if (historyController === controller) historyData.value = data.metrics;
   } catch (err) {
-    console.error("Error loading historical metrics: ", err);
+    if (historyController === controller) {
+      historyError.value = err.name === 'AbortError'
+        ? 'The request timed out. Please try again.'
+        : 'Unable to load metrics. Check your connection or sign in again.';
+    }
   } finally {
-    isHistoryLoading.value = false;
+    clearTimeout(timeout);
+    if (historyController === controller) isHistoryLoading.value = false;
   }
-};
-
-// SVG Circular Gauge Math
-const RADIUS = 40;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const strokeDashoffset = (percentage) => {
-  const cleanPct = Math.max(0, Math.min(100, percentage || 0));
-  return CIRCUMFERENCE - (cleanPct / 100) * CIRCUMFERENCE;
-};
-
-// Determine Color Class based on usage
-const getGaugeColor = (pct) => {
-  if (pct >= 85) return 'stroke-red-500 shadow-red-500/50 glow-danger';
-  if (pct >= 60) return 'stroke-amber-500 shadow-amber-500/50 glow-warning';
-  return 'stroke-emerald-400 shadow-emerald-400/50 glow-success';
 };
 
 // Stat bar gradient color based on usage
@@ -159,7 +180,10 @@ const buildPoints = (metrics, key, width, height) => {
   const graphHeight = height - padding * 2;
 
   return metrics.map((m, index) => {
-    const x = padding + (index / (metrics.length - 1)) * graphWidth;
+    const first = new Date(metrics[0].created_at).getTime();
+    const span = new Date(metrics[metrics.length - 1].created_at).getTime() - first;
+    const position = span > 0 ? (new Date(m.created_at).getTime() - first) / span : index / (metrics.length - 1);
+    const x = padding + position * graphWidth;
     const val = Math.max(0, Math.min(maxVal, m[key] || 0));
     const y = padding + graphHeight - (val / maxVal) * graphHeight;
     return `${x},${y}`;
@@ -202,6 +226,27 @@ const buildAreaPoints = (metrics, key, width, height) => {
     <div class="py-10 bg-slate-950/20 min-h-screen text-gray-200">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         
+        <div v-if="localServers.length" class="mb-8 space-y-5">
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <div v-for="stat in [{ label: 'Total servers', value: summary.total }, { label: 'Online', value: summary.online }, { label: 'Needs attention', value: summary.attention }, { label: 'Pending setup', value: summary.pending }]" :key="stat.label" class="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+              <p class="text-xs text-gray-400">{{ stat.label }}</p>
+              <p class="mt-2 text-3xl font-semibold tabular-nums">{{ stat.value }}</p>
+            </div>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="flex-1">
+              <label for="server-search" class="block text-xs text-gray-400 mb-2">Search servers</label>
+              <input id="server-search" v-model="search" type="search" placeholder="Search by name or IP address" class="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="server-status" class="block text-xs text-gray-400 mb-2">Status</label>
+              <select id="server-status" v-model="statusFilter" class="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-400">
+                <option value="all">All servers</option><option value="online">Online</option><option value="offline">Offline</option><option value="pending">Pending setup</option><option value="attention">Needs attention</option>
+              </select>
+            </div>
+          </div>
+          <p class="text-xs text-gray-400" role="status">Showing {{ filteredServers.length }} of {{ summary.total }} servers · Attention: offline, pending, or resource usage ≥ 85%</p>
+        </div>
         <!-- Empty State -->
         <div v-if="localServers.length === 0" class="glass-panel text-center p-16 rounded-2xl border border-white/5 bg-slate-900/40">
           <div class="inline-flex p-4 rounded-full bg-indigo-500/10 text-indigo-400 mb-4 border border-indigo-500/20 glow-primary">
@@ -222,9 +267,13 @@ const buildAreaPoints = (metrics, key, width, height) => {
         </div>
 
         <!-- Servers Grid -->
+        <div v-else-if="!filteredServers.length" class="rounded-2xl border border-white/10 p-10 text-center">
+          <p>No servers match your filters.</p>
+          <button @click="search = ''; statusFilter = 'all'" class="mt-3 text-indigo-300 underline">Clear filters</button>
+        </div>
         <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div 
-            v-for="server in localServers" 
+            v-for="server in filteredServers"
             :key="server.id"
             class="glass-panel rounded-2xl p-6 border border-white/5 flex flex-col justify-between"
             :class="server.is_online ? 'bg-slate-900/30' : 'bg-slate-950/50'"
@@ -260,6 +309,7 @@ const buildAreaPoints = (metrics, key, width, height) => {
                 </span>
               </div>
 
+              <p class="mb-3 text-xs text-gray-400">Last report: {{ formatTime(server.last_seen_at) }}<span v-if="!server.is_online && server.latest_metric" class="text-amber-400"> · Showing last known values</span></p>
               <!-- VPS Hardware Specs -->
               <div class="grid grid-cols-2 gap-3 py-3 border-y border-white/5 mb-6 text-xs text-gray-400 font-mono">
                 <div>
@@ -376,12 +426,17 @@ const buildAreaPoints = (metrics, key, width, height) => {
             <!-- Expandable History Charts Panel -->
             <div v-if="activeHistoryServerId === server.id" class="w-full py-4 border-t border-white/5 mb-4 transition-all">
               <div class="flex justify-between items-center mb-3">
-                <h4 class="text-xs font-bold text-indigo-400 font-mono tracking-wider">Metrics History (24h Trend)</h4>
+                <h4 class="text-xs font-bold text-indigo-400 font-mono tracking-wider">Recent Metrics (last 24h)</h4>
                 <button @click="toggleHistory(server.id)" class="text-2xs text-gray-500 hover:text-white font-mono uppercase tracking-widest">Close</button>
               </div>
 
+              <p class="text-xs text-gray-500 mb-3">Up to 2,000 latest samples. Times shown in your local timezone.</p>
+              <div v-if="historyError" role="alert" class="rounded-lg bg-red-500/10 p-4 text-sm text-red-300">
+                {{ historyError }}
+                <button @click="toggleHistory(server.id, true)" class="ml-2 underline">Retry</button>
+              </div>
               <!-- Chart Loader -->
-              <div v-if="isHistoryLoading" class="flex justify-center py-10">
+              <div v-else-if="isHistoryLoading" class="flex justify-center py-10">
                 <svg class="animate-spin h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -395,6 +450,7 @@ const buildAreaPoints = (metrics, key, width, height) => {
 
               <!-- SVG Interactive Line Graph -->
               <div v-else class="space-y-4">
+                <p class="text-xs text-gray-400">{{ formatTime(historyData[0]?.created_at) }} — {{ formatTime(historyData[historyData.length - 1]?.created_at) }}</p>
                 <div>
                   <div class="flex justify-between text-3xs text-gray-500 font-mono mb-1">
                     <span>CPU USAGE TREND</span>

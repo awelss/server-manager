@@ -106,8 +106,13 @@ class ServerController extends Controller
                 'uptime',
                 'created_at',
             ])
-            ->orderBy('created_at', 'asc')
-            ->get();
+            ->where('created_at', '>=', now()->subDay())
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(2000)
+            ->get()
+            ->reverse()
+            ->values();
 
         return response()->json([
             'status' => 'success',

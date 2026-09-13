@@ -1,6 +1,6 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
-import { useForm, usePage } from '@inertiajs/vue3';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
+import { useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
   show: {
@@ -14,6 +14,32 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
+const dialog = ref(null);
+let previousOverflow = null;
+
+const restoreScroll = () => {
+  if (previousOverflow !== null) {
+    document.body.style.overflow = previousOverflow;
+    previousOverflow = null;
+  }
+};
+
+const syncDialog = () => {
+  if (props.show) {
+    if (!dialog.value?.open) {
+      previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      dialog.value?.showModal();
+    }
+  } else {
+    dialog.value?.close();
+    restoreScroll();
+  }
+};
+
+watch(() => props.show, syncDialog, { flush: 'post' });
+onMounted(syncDialog);
+onUnmounted(restoreScroll);
 
 const form = useForm({
   name: '',
@@ -23,21 +49,6 @@ const form = useForm({
 const isSuccessState = ref(false);
 const newServerDetails = ref(null);
 const copySuccess = ref(false);
-
-const page = usePage();
-
-// Monitor session flash messages for newly created servers
-watch(
-  () => page.props.flash,
-  (newFlash) => {
-    if (newFlash && newFlash.new_server) {
-      newServerDetails.value = newFlash.new_server;
-      isSuccessState.value = true;
-      form.reset();
-    }
-  },
-  { deep: true }
-);
 
 const installCommand = computed(() => {
   if (!newServerDetails.value) return '';
@@ -58,8 +69,13 @@ const copyToClipboard = async () => {
 
 const submit = () => {
   form.post(route('servers.store'), {
-    onSuccess: () => {
-      // Handled by flash watcher
+    onSuccess: (page) => {
+      const details = page.props.flash?.new_server;
+      if (details && props.show) {
+        newServerDetails.value = details;
+        isSuccessState.value = true;
+        form.reset();
+      }
     },
   });
 };
@@ -68,27 +84,27 @@ const handleClose = () => {
   isSuccessState.value = false;
   newServerDetails.value = null;
   form.reset();
+  form.clearErrors();
+  copySuccess.value = false;
   emit('close');
 };
 </script>
 
 <template>
-  <div v-if="show" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <!-- Backdrop -->
-    <div class="flex items-end justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-      <div class="fixed inset-0 transition-opacity bg-black/60 backdrop-blur-sm" aria-hidden="true" @click="handleClose"></div>
-
-      <!-- Centering trick -->
-      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-      <!-- Modal Content Panel -->
-      <div class="inline-block align-bottom glass-panel border border-white/10 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full bg-slate-900/90 text-gray-200">
-        
+  <Teleport to="body">
+    <dialog
+      ref="dialog"
+      aria-labelledby="register-vps-title"
+      class="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 p-0 text-gray-200 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+      @cancel.prevent="handleClose"
+      @click="($event.target === $event.currentTarget) && handleClose()"
+    >
+      <div v-if="show" class="relative">
         <!-- Form State -->
         <form v-if="!isSuccessState" @submit.prevent="submit" class="p-6">
           <div class="flex justify-between items-center mb-6">
-            <h3 class="text-xl font-bold text-indigo-400 font-sans tracking-wide">Add New VPS Instance</h3>
-            <button type="button" @click="handleClose" class="text-gray-400 hover:text-white transition-colors">
+            <h3 id="register-vps-title" class="text-xl font-bold text-indigo-400 font-sans tracking-wide">Add New VPS Instance</h3>
+            <button type="button" aria-label="Close registration" @click="handleClose" class="text-gray-400 hover:text-white transition-colors">
               <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -101,7 +117,8 @@ const handleClose = () => {
               <input 
                 v-model="form.name"
                 type="text" 
-                id="name" 
+                id="name"
+                autofocus
                 required
                 placeholder="e.g., Production-SG"
                 class="w-full px-4 py-2.5 bg-slate-950/80 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-gray-200 placeholder-gray-500 transition-all"
@@ -153,7 +170,7 @@ const handleClose = () => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 class="text-2xl font-bold text-emerald-400">Server Registered!</h3>
+            <h3 id="register-vps-title" class="text-2xl font-bold text-emerald-400">Server Registered!</h3>
             <p class="text-gray-400 text-sm mt-1">Ready to install the monitoring agent on <span class="text-indigo-300 font-semibold">{{ newServerDetails?.name }}</span></p>
           </div>
 
@@ -212,6 +229,6 @@ const handleClose = () => {
         </div>
 
       </div>
-    </div>
-  </div>
+    </dialog>
+  </Teleport>
 </template>
